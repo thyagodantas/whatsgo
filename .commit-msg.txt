@@ -1,15 +1,20 @@
-send: inject MessageSecret for interactive messages
+store: add FetchLatestWAVersion helper
 
-Upstream only injects a MessageContextInfo.MessageSecret (32 bytes) when
-the client is in "bot mode" (Business API / InitialPairBot). Most callers
-don't use that, so when they send ButtonsMessage / ListMessage /
-InteractiveMessage from a regular session, the recipient can't decrypt
-the payload (renders empty / "Aguardando mensagem").
+whatsgo now exposes a function that hits the WA check-update endpoint
+and returns the current client version as a WAVersionContainer. This
+lets the caller decide when to fetch (typically at startup) and how to
+apply it (via store.SetWAVersion).
 
-whatsgo now injects the secret automatically in getMessageContent for any
-interactive message, regardless of bot mode. Non-interactive messages
-(text, media) are untouched, so the existing behavior is preserved.
+Typical usage:
 
-The helper also follows the ViewOnceMessage / ViewOnceMessageV2 /
-EphemeralMessage wrappers, so interactive messages wrapped in those
-container types are handled too.
+    version, err := store.FetchLatestWAVersion(ctx, http.DefaultClient)
+    if err != nil { /* fallback to bundled */ } else {
+        store.SetWAVersion(version)
+    }
+
+The helper does no caching of its own — caching is the caller's job, so
+the function stays a thin pure helper with no global state.
+
+Also: tweak the doc comment on the bundled waVersion fallback in
+clientpayload.go to make it clear it's a fallback, and point to the
+new helper as the recommended way to stay in sync.
