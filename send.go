@@ -996,6 +996,13 @@ func getButtonTypeFromMessage(msg *waE2E.Message) string {
 		return "list"
 	case msg.ListResponseMessage != nil:
 		return "list_response"
+	case msg.InteractiveMessage != nil:
+		// whatsgo: distinguish native_flow from other interactive subtypes
+		// so the <biz> stanza carries the right child node.
+		if msg.InteractiveMessage.GetNativeFlowMessage() != nil {
+			return "interactive"
+		}
+		return ""
 	case msg.InteractiveResponseMessage != nil:
 		return "interactive_response"
 	default:
@@ -1017,6 +1024,13 @@ func getButtonAttributes(msg *waE2E.Message) waBinary.Attrs {
 		return waBinary.Attrs{
 			"v":    "2",
 			"type": strings.ToLower(waE2E.ListMessage_ListType_name[int32(msg.ListMessage.GetListType())]),
+		}
+	case msg.InteractiveMessage != nil:
+		// whatsgo: native_flow uses type="native_flow" and v="1" on the
+		// outer <interactive> child of <biz>. Replica of what Baileys sends.
+		return waBinary.Attrs{
+			"type": "native_flow",
+			"v":    "1",
 		}
 	default:
 		return waBinary.Attrs{}
@@ -1142,12 +1156,34 @@ func (cli *Client) getMessageContent(
 	}
 
 	if buttonType := getButtonTypeFromMessage(message); buttonType != "" {
+		attrs := getButtonAttributes(message)
+		bizChildren := []waBinary.Node{{
+			Tag:   buttonType,
+			Attrs: attrs,
+		}}
+		// whatsgo: for InteractiveMessage + native_flow, the server also
+		// requires a <native_flow v="9" name="mixed"/> child inside the
+		// <interactive> wrapper, plus a <quality_control> sibling. Without
+		// those, the server returns 405 (placeholder <biz><buttons/></biz>
+		// style stanza is rejected).
+		if buttonType == "interactive" {
+			bizChildren[0].Content = []waBinary.Node{{
+				Tag:   "native_flow",
+				Attrs: waBinary.Attrs{"v": "9", "name": "mixed"},
+			}}
+			bizChildren = append(bizChildren, waBinary.Node{
+				Tag:   "quality_control",
+				Attrs: waBinary.Attrs{"source_type": "third_party"},
+			})
+		}
 		content = append(content, waBinary.Node{
 			Tag: "biz",
-			Content: []waBinary.Node{{
-				Tag:   buttonType,
-				Attrs: getButtonAttributes(message),
-			}},
+			Attrs: waBinary.Attrs{
+				"actual_actors":   "2",
+				"host_storage":    "2",
+				"privacy_mode_ts": strconv.FormatInt(time.Now().Unix(), 10),
+			},
+			Content: bizChildren,
 		})
 	}
 	return content

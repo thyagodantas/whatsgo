@@ -1,0 +1,15 @@
+send: build native <biz> stanza for InteractiveMessage
+
+The previous code didn't emit a <biz> node at all for InteractiveMessage
+(getButtonTypeFromMessage returned empty for it), so the server rejected
+those messages with HTTP 405.
+
+Now:
+  * getButtonTypeFromMessage returns "interactive" for InteractiveMessage
+    that contains a NativeFlowMessage.
+  * getButtonAttributes returns the native_flow attrs (type=native_flow,
+    v=1) for InteractiveMessage.
+  * getMessageContent wraps the <biz> with actual_actors/host_storage/
+    privacy_mode_ts attrs and, for native_flow, adds a <native_flow v=9
+    name=mixed/> child plus a <quality_control source_type=third_party/>
+    sibling. Replica of the format Baileys sends.
