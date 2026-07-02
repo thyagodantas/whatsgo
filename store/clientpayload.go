@@ -75,8 +75,15 @@ func (vc WAVersionContainer) ProtoAppVersion() *waWa6.ClientPayload_UserAgent_Ap
 	}
 }
 
-// waVersion is the WhatsApp web client version
-var waVersion = WAVersionContainer{2, 3000, 1042386815}
+// waVersion is the WhatsApp web client version.
+//
+// In the upstream library, the default is older ({2, 3000, 1042386815}),
+// which causes the WhatsApp server to reject interactive messages (buttons
+// and lists) with HTTP 405. whatsgo ships with a newer default so that
+// interactive messages work out of the box without the caller having to
+// call store.SetWAVersion. If you need to override the version at runtime,
+// store.SetWAVersion still works.
+var waVersion = WAVersionContainer{2, 3000, 1042505466}
 
 // waVersionHash is the md5 hash of a dot-separated waVersion
 var waVersionHash = waVersion.Hash()
