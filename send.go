@@ -8,6 +8,7 @@ package whatsgo
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
@@ -1156,6 +1157,7 @@ func (cli *Client) getMessageContent(
 	}
 
 	if buttonType := getButtonTypeFromMessage(message); buttonType != "" {
+		ensureInteractiveMessageSecret(message)
 		attrs := getButtonAttributes(message)
 		bizChildren := []waBinary.Node{{
 			Tag:   buttonType,
@@ -1408,6 +1410,54 @@ func copyAttrs(from, to waBinary.Attrs) {
 	for k, v := range from {
 		to[k] = v
 	}
+}
+
+// ensureInteractiveMessageSecret makes sure the message has a
+// MessageContextInfo.MessageSecret of 32 random bytes if it's an interactive
+// message (ButtonsMessage / ListMessage / InteractiveMessage). Without it,
+// the recipient device refuses to decrypt the message and it shows up empty
+// ("Aguardando mensagem").
+//
+// In the upstream library, this is only done automatically in "bot mode"
+// (cli.InitialPairBot / Business API), which most callers don't use. whatsgo
+// lifts that restriction so any caller can send interactive messages from
+// regular sessions.
+//
+// The change is a no-op for non-interactive messages (text, media), so it
+// doesn't affect the existing behavior for those.
+//
+// Implemented in-place, mutating *waE2E.Message before it's serialized into
+// the stanza.
+func ensureInteractiveMessageSecret(msg *waE2E.Message) {
+	for {
+		switch {
+		case msg.ViewOnceMessage != nil:
+			msg = msg.ViewOnceMessage.Message
+		case msg.ViewOnceMessageV2 != nil:
+			msg = msg.ViewOnceMessageV2.Message
+		case msg.EphemeralMessage != nil:
+			msg = msg.EphemeralMessage.Message
+		default:
+			goto check
+		}
+	}
+check:
+	if msg.ButtonsMessage == nil && msg.ListMessage == nil && msg.InteractiveMessage == nil {
+		return
+	}
+	if msg.MessageContextInfo == nil {
+		msg.MessageContextInfo = &waE2E.MessageContextInfo{}
+	}
+	if len(msg.MessageContextInfo.MessageSecret) >= 32 {
+		return
+	}
+	secret := make([]byte, 32)
+	if _, err := rand.Read(secret); err != nil {
+		// If entropy fails, prefer sending without a secret over refusing
+		// to send at all (the server will decide).
+		return
+	}
+	msg.MessageContextInfo.MessageSecret = secret
 }
 
 func (cli *Client) encryptMessageForDevice(

@@ -1,15 +1,15 @@
-send: build native <biz> stanza for InteractiveMessage
+send: inject MessageSecret for interactive messages
 
-The previous code didn't emit a <biz> node at all for InteractiveMessage
-(getButtonTypeFromMessage returned empty for it), so the server rejected
-those messages with HTTP 405.
+Upstream only injects a MessageContextInfo.MessageSecret (32 bytes) when
+the client is in "bot mode" (Business API / InitialPairBot). Most callers
+don't use that, so when they send ButtonsMessage / ListMessage /
+InteractiveMessage from a regular session, the recipient can't decrypt
+the payload (renders empty / "Aguardando mensagem").
 
-Now:
-  * getButtonTypeFromMessage returns "interactive" for InteractiveMessage
-    that contains a NativeFlowMessage.
-  * getButtonAttributes returns the native_flow attrs (type=native_flow,
-    v=1) for InteractiveMessage.
-  * getMessageContent wraps the <biz> with actual_actors/host_storage/
-    privacy_mode_ts attrs and, for native_flow, adds a <native_flow v=9
-    name=mixed/> child plus a <quality_control source_type=third_party/>
-    sibling. Replica of the format Baileys sends.
+whatsgo now injects the secret automatically in getMessageContent for any
+interactive message, regardless of bot mode. Non-interactive messages
+(text, media) are untouched, so the existing behavior is preserved.
+
+The helper also follows the ViewOnceMessage / ViewOnceMessageV2 /
+EphemeralMessage wrappers, so interactive messages wrapped in those
+container types are handled too.
