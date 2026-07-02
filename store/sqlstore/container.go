@@ -82,7 +82,7 @@ func NewWithDB(db *sql.DB, dialect string, log waLog.Logger) *Container {
 		panic(err)
 	}
 	wrapped.UpgradeTable = upgrades.Table
-	wrapped.VersionTable = "whatsgo_version"
+	wrapped.VersionTable = "whatsmeow_version"
 	return NewWithWrappedDB(wrapped, log)
 }
 
@@ -117,7 +117,7 @@ SELECT jid, lid, registration_id, noise_key, identity_key,
        signed_pre_key, signed_pre_key_id, signed_pre_key_sig,
        adv_key, adv_details, adv_account_sig, adv_account_sig_key, adv_device_sig,
        platform, business_name, push_name, facebook_uuid, lid_migration_ts
-FROM whatsgo_device
+FROM whatsmeow_device
 `
 
 const getDeviceQuery = getAllDevicesQuery + " WHERE jid=$1"
@@ -189,7 +189,7 @@ func (c *Container) GetDevice(ctx context.Context, jid types.JID) (*store.Device
 
 const (
 	insertDeviceQuery = `
-		INSERT INTO whatsgo_device (jid, lid, registration_id, noise_key, identity_key,
+		INSERT INTO whatsmeow_device (jid, lid, registration_id, noise_key, identity_key,
 									  signed_pre_key, signed_pre_key_id, signed_pre_key_sig,
 									  adv_key, adv_details, adv_account_sig, adv_account_sig_key, adv_device_sig,
 									  platform, business_name, push_name, facebook_uuid, lid_migration_ts)
@@ -201,7 +201,7 @@ const (
 				push_name=excluded.push_name,
 				lid_migration_ts=excluded.lid_migration_ts
 	`
-	deleteDeviceQuery = `DELETE FROM whatsgo_device WHERE jid=$1`
+	deleteDeviceQuery = `DELETE FROM whatsmeow_device WHERE jid=$1`
 )
 
 // NewDevice creates a new device in this database.

@@ -1,22 +1,26 @@
-store: drop FetchLatestWAVersion (wrong endpoint)
+sqlstore: revert table name prefix from whatsgo_ to whatsmeow_
 
-The previous FetchLatestWAVersion in store/waversion.go hit
-https://web.whatsapp.com/check-update, which returns the version
-advertised to the end-user web client (so the browser can prompt
-"please refresh"). That number, when set as our client version,
-gets rejected by the messaging server with HTTP 405 on connect:
+When the module was renamed from whatsmeow to whatsgo, a global
+text replace turned every occurrence of "whatsmeow" (including the
+SQL table name prefix) into "whatsgo" across the whole repo.
 
-    Client outdated (405) connect failure (client version: 2.2413.51)
+That worked fine for Go identifiers, but it broke the SQL schema:
+00-latest-schema.sql creates tables named whatsmeow_device,
+whatsmeow_identity_keys, etc., while the regenerated Go code in
+container.go / store.go / lidmap.go was referencing them as
+whatsgo_device etc. Result: Upgrade() created the tables, but every
+read/write failed with "no such table: whatsgo_device".
 
-The correct version is exposed by whatsgo.GetLatestVersion, which
-fetches the WA web HTML and parses the "client_revision":NNNNN
-field. That's the revision the messaging server actually accepts.
+The 00-latest-schema.sql and per-upgrade SQL files were left
+untouched because they are loaded by path, not by module name,
+so the rename pass didn't reach them.
 
-So:
-  * Delete the broken store.FetchLatestWAVersion helper.
-  * Document whatsgo.GetLatestVersion as the supported way to
-    discover the current version (already existed in update.go,
-    just not pointed at).
+Fix: in the three .go files that reference the SQL table names,
+revert the prefix from whatsgo_ to whatsmeow_ so they match the
+schema. This also preserves forward-compat with anyone who already
+had a whatsmeow_device / whatsmeow.db lying around.
 
-Backend usage (in manager.go): use whatsgo.GetLatestVersion +
-store.SetWAVersion, not the removed helper.
+Found this when the first real QR scan completed but the post-pair
+save failed with:
+    Failed to pair device: failed to save device store:
+    SQL logic error: no such table: whatsgo_device (1)
