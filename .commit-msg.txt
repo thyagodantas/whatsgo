@@ -1,26 +1,20 @@
-sqlstore: revert table name prefix from whatsgo_ to whatsmeow_
+docs: add CALL.md describing meowcaller integration
 
-When the module was renamed from whatsmeow to whatsgo, a global
-text replace turned every occurrence of "whatsmeow" (including the
-SQL table name prefix) into "whatsgo" across the whole repo.
+whatsgo only implements the receive side of WhatsApp calling: it parses
+<call> stanzas, dispatches CallOffer/CallAccept/CallTerminate events,
+and exposes RejectCall. Full call lifecycle (answer, place outbound,
+audio/video) lives in the external meowcaller library.
 
-That worked fine for Go identifiers, but it broke the SQL schema:
-00-latest-schema.sql creates tables named whatsmeow_device,
-whatsmeow_identity_keys, etc., while the regenerated Go code in
-container.go / store.go / lidmap.go was referencing them as
-whatsgo_device etc. Result: Upgrade() created the tables, but every
-read/write failed with "no such table: whatsgo_device".
+Document the integration pattern: callers add a go.mod replace that
+swaps go.mau.fi/whatsmeow for github.com/thyagodantas/whatsgo, so
+meowcaller's *whatsmeow.Client reference resolves to the same struct as
+*whatsgo.Client. Without that replace, the two types are distinct at
+compile time even though their memory layouts match.
 
-The 00-latest-schema.sql and per-upgrade SQL files were left
-untouched because they are loaded by path, not by module name,
-so the rename pass didn't reach them.
+Also call out the existing receive-only support (RejectCall + event
+handlers) for callers that don't need full calling.
 
-Fix: in the three .go files that reference the SQL table names,
-revert the prefix from whatsgo_ to whatsmeow_ so they match the
-schema. This also preserves forward-compat with anyone who already
-had a whatsmeow_device / whatsmeow.db lying around.
-
-Found this when the first real QR scan completed but the post-pair
-save failed with:
-    Failed to pair device: failed to save device store:
-    SQL logic error: no such table: whatsgo_device (1)
+(Initially tried to add meowcaller as a whatsgo dependency with the
+replace inside whatsgo/go.mod, but Go only honors the replace from the
+root module that drives the build, so the replace has to live in the
+caller's go.mod.)

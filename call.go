@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2021 Tulir Asokan
+// Copyright (c) 2021 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -13,6 +13,16 @@ import (
 	"github.com/thyagodantas/whatsgo/types"
 	"github.com/thyagodantas/whatsgo/types/events"
 )
+
+// Calling support in whatsgo is limited to the receive side: the library
+// parses <call> stanzas the server sends and dispatches them as events
+// (CallOffer, CallAccept, CallTerminate, etc.) and exposes RejectCall so
+// the bot can refuse inbound calls. Enough for monitoring, logging, and
+// rejecting.
+//
+// Full call lifecycle (answer, place outbound calls, audio, video) lives
+// in the external github.com/purpshell/meowcaller library. See CALL.md
+// in the project root for the integration pattern.
 
 func (cli *Client) handleCallEvent(ctx context.Context, node *waBinary.Node) {
 	defer cli.maybeDeferredAck(ctx, node)()
@@ -34,7 +44,6 @@ func (cli *Client) handleCallEvent(ctx context.Context, node *waBinary.Node) {
 	if basicMeta.CallCreator.Server == types.HiddenUserServer {
 		basicMeta.CallCreatorAlt = cag.OptionalJIDOrEmpty("caller_pn")
 	} else {
-		// This may not actually exist
 		basicMeta.CallCreatorAlt = cag.OptionalJIDOrEmpty("caller_lid")
 	}
 	switch child.Tag {
@@ -102,7 +111,7 @@ func (cli *Client) handleCallEvent(ctx context.Context, node *waBinary.Node) {
 	}
 }
 
-// RejectCall reject an incoming call.
+// RejectCall rejects an incoming call.
 func (cli *Client) RejectCall(ctx context.Context, callFrom types.JID, callID string) error {
 	ownID := cli.getOwnID()
 	if ownID.IsEmpty() {
