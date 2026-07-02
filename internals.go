@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"time"
+	"unsafe"
 
 	"go.mau.fi/libsignal/keys/prekey"
 
@@ -38,6 +39,24 @@ type DangerousInternalClient struct {
 // Deprecated: dangerous
 func (cli *Client) DangerousInternals() *DangerousInternalClient {
 	return &DangerousInternalClient{cli}
+}
+
+// RawClientAddr returns the memory address of the underlying *Client
+// value as an unsafe.Pointer. Callers convert it back to a typed
+// pointer whose target type has the same memory layout as *Client —
+// typically *whatsmeow.Client, when integrating with libraries that
+// import the upstream module (such as github.com/purpshell/meowcaller).
+//
+// The whatsgo package is a fork of go.mau.fi/whatsmeow and re-exports
+// the same struct under the name *Client; the layouts match, so a
+// typed pointer round-trip through unsafe.Pointer is sound. If the
+// whatsmeow struct ever drifts from ours, this becomes silently wrong
+// — keep this in sync with the whatsmeow fork.
+//
+// Production code should prefer the public Client API; this is a
+// deliberate escape hatch for tight integrations only. See CALL.md.
+func (int *DangerousInternalClient) RawClientAddr() unsafe.Pointer {
+	return unsafe.Pointer(int.c)
 }
 
 type DangerousInfoQuery = infoQuery

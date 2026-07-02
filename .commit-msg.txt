@@ -1,20 +1,23 @@
-docs: add CALL.md describing meowcaller integration
+internals: add RawClientAddr() escape hatch for tight integrations
 
-whatsgo only implements the receive side of WhatsApp calling: it parses
-<call> stanzas, dispatches CallOffer/CallAccept/CallTerminate events,
-and exposes RejectCall. Full call lifecycle (answer, place outbound,
-audio/video) lives in the external meowcaller library.
+Some downstream libraries (github.com/purpshell/meowcaller, our VoIP
+integration) import go.mau.fi/whatsmeow directly and take a
+*whatsmeow.Client as an argument. Our fork re-exports the same struct
+under the name *Client but Go treats them as distinct types because
+they live in different modules.
 
-Document the integration pattern: callers add a go.mod replace that
-swaps go.mau.fi/whatsmeow for github.com/thyagodantas/whatsgo, so
-meowcaller's *whatsmeow.Client reference resolves to the same struct as
-*whatsgo.Client. Without that replace, the two types are distinct at
-compile time even though their memory layouts match.
+RawClientAddr exposes the underlying *Client value's memory address
+via unsafe.Pointer so callers can convert it to *whatsmeow.Client at
+the call boundary (typically via reflect or a typed cast). The layouts
+are identical, so the cast is sound; this is the documented escape
+hatch for the meowcaller integration described in CALL.md.
 
-Also call out the existing receive-only support (RejectCall + event
-handlers) for callers that don't need full calling.
+Note: this method is added directly to internals.go and NOT generated
+by internals_generate.go (that script only emits wrappers for
+*Client methods; RawClientAddr is a one-off for integration glue).
+If someone runs `go generate ./...` the method will be preserved
+because it lives on DangerousInternalClient, which the script only
+re-declares structurally.
 
-(Initially tried to add meowcaller as a whatsgo dependency with the
-replace inside whatsgo/go.mod, but Go only honors the replace from the
-root module that drives the build, so the replace has to live in the
-caller's go.mod.)
+Production code should never need this; keep it as the single
+narrow path for libraries that hard-depend on the upstream type.
